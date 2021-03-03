@@ -4,24 +4,14 @@ use crate::transaction::{Transaction, TransactionLog, Type::*};
 /// Run the correct logic for the type of transaction.
 /// If the transaction was valid and successful, it gets added to the TransactionLog
 pub fn execute_transaction(t: &Transaction, t_log: &mut TransactionLog, client: &mut Client) {
+    let tx_exists = t_log.contains(t.id);
     let record_op = match t.r#type {
-        Deposit => {
-            if t_log.contains(t.id) {
-                false
-            } else {
-                deposit(client, t.amount)
-            }
-        }
-        Withdrawal => {
-            if t_log.contains(t.id) {
-                false
-            } else {
-                withdraw(client, t.amount)
-            }
-        }
+        Deposit if !tx_exists => deposit(client, t.amount),
+        Withdrawal if !tx_exists => withdraw(client, t.amount),
         Dispute => dispute(client, t.id, t_log),
         Resolve => resolve(client, t.id, t_log),
         Chargeback => chargeback(client, t.id, t_log),
+        _ => false,
     };
     if record_op {
         t_log.push(t);
