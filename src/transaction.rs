@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 /// The type of the transaction (withdrawal, deposit, dispute, resolve, chargeback)
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[serde(rename_all = "snake_case")]
 pub enum Type {
     Withdrawal,
@@ -14,6 +15,7 @@ pub enum Type {
 
 /// A Transaction record
 #[derive(Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Transaction {
     pub r#type: Type,
     pub client: u16,
