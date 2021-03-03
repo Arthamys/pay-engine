@@ -1,3 +1,0 @@
-2021-03-02 21:09:15,687 TRACE [pay_engine::engine] deposited 1.77 to client 2's balance
-client,available,held,total,locked
-2,1.77,0.0,1.77,false
