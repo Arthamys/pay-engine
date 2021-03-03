@@ -1,0 +1,28 @@
+
+[package]
+name = "pay-engine-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+lazy_static = "1.4.0"
+libfuzzer-sys = "0.4"
+
+[dependencies.pay-engine]
+path = ".."
+features = ["arbitrary"]
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzz_tx"
+path = "fuzz_targets/fuzz_tx.rs"
+test = false
+doc = false
