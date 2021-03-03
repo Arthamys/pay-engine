@@ -1,13 +1,6 @@
-mod client;
-mod engine;
-mod error;
-mod parser;
-mod transaction;
-
-pub use error::Result;
 use parser::Parser;
+use pay_engine::*;
 use simple_logger::SimpleLogger;
-use transaction::Transaction;
 
 fn main() -> Result<()> {
     SimpleLogger::new()

@@ -1,5 +1,5 @@
-use super::error::Result;
-use super::Transaction;
+use crate::transaction::Transaction;
+use crate::Result;
 use csv::{Reader, ReaderBuilder};
 
 pub struct Parser {
