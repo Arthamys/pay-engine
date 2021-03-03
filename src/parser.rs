@@ -18,12 +18,15 @@ impl Parser {
             record: csv::StringRecord::new(),
         })
     }
+}
 
-    pub fn next(&mut self) -> Result<Option<Transaction>> {
-        let res = match self.reader.read_record(&mut self.record)? {
-            true => Some(self.record.deserialize(None)?),
+impl Iterator for Parser {
+    type Item = Transaction;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.reader.read_record(&mut self.record).unwrap_or(false) {
+            true => self.record.deserialize(None).ok(),
             false => None,
-        };
-        Ok(res)
+        }
     }
 }

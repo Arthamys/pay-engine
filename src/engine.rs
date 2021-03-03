@@ -1,5 +1,22 @@
-use crate::client::Client;
+use crate::client::{Client, ClientWallets};
 use crate::transaction::{Transaction, TransactionLog, Type::*};
+
+pub fn run<S: Iterator>(
+    transactions: &mut S, /*stream of transactions*/
+) -> (ClientWallets, TransactionLog)
+where
+    S::Item: Into<Transaction>,
+{
+    let mut t_log = TransactionLog::new();
+    let mut wallets = ClientWallets::new();
+
+    while let Some(t) = transactions.next() {
+        let t = t.into();
+        let mut client = wallets.get_or_create_mut(t.client);
+        execute_transaction(&t, &mut t_log, &mut client);
+    }
+    (wallets, t_log)
+}
 
 /// Run the correct logic for the type of transaction.
 /// If the transaction was valid and successful, it gets added to the TransactionLog

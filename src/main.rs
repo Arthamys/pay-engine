@@ -4,11 +4,10 @@ mod error;
 mod parser;
 mod transaction;
 
-use client::ClientWallets;
 pub use error::Result;
 use parser::Parser;
 use simple_logger::SimpleLogger;
-use transaction::{Transaction, TransactionLog};
+use transaction::Transaction;
 
 fn main() -> Result<()> {
     SimpleLogger::new()
@@ -33,7 +32,7 @@ fn main() -> Result<()> {
 }
 
 pub fn run_engine(filepath: String) -> Result<()> {
-    let mut parser = match Parser::new(&filepath) {
+    let parser = match Parser::new(&filepath) {
         Ok(p) => p,
         Err(err) => {
             eprintln!("{}", err);
@@ -41,16 +40,7 @@ pub fn run_engine(filepath: String) -> Result<()> {
         }
     };
 
-    let mut transactions = TransactionLog::new();
-    let mut wallets = ClientWallets::new();
-
-    // We simply parse the file line by line, and use the engine to apply each
-    // transaction
-    while let Some(t) = parser.next().map_err(|_e| error::Error::DeserializeError)? {
-        // find client in the list we have, if it does not exits, create it
-        let mut client = wallets.get_or_create_mut(t.client);
-        engine::execute_transaction(&t, &mut transactions, &mut client);
-    }
+    let (wallets, _) = engine::run(&mut parser.into_iter());
 
     wallets.print_balances().map_err(|e| {
         eprintln!("Could not serialize wallet balances ({})", e);
