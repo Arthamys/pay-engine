@@ -18,6 +18,15 @@ It simply runs the program (invoking `cargo run`) and checks the output against 
 
 Some of the core functionality of for handling client's balances are also unit tested. (run `cargo t`)
 
+## Fuzzing
+
+Make sure you have `cargo-fuzz` installed (`cargo install cargo-fuzz`)
+
+```bash
+cargo +nightly fuzz run fuzz_tz -- -jobs=30 -ascii_only=1 -rss_limit_mb=0 -len_control=0 -malloc_limit_mb=4096
+```
+
+I have not found any issues while fuzzing yet.
 
 # Design
 
