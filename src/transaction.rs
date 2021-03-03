@@ -1,3 +1,4 @@
+use rand::random;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -13,6 +14,20 @@ pub enum Type {
     Chargeback,
 }
 
+impl Type {
+    fn random() -> Self {
+        use Type::*;
+        match random::<u8>() % 5_u8 {
+            0 => Withdrawal,
+            1 => Deposit,
+            2 => Dispute,
+            3 => Resolve,
+            4 => Chargeback,
+            _ => unreachable!(),
+        }
+    }
+}
+
 /// A Transaction record
 #[derive(Deserialize, Debug, Clone)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
@@ -26,7 +41,23 @@ pub struct Transaction {
     under_dispute: bool,
 }
 
+static mut ID: u32 = 1;
+
 impl Transaction {
+    pub fn new_random() -> Self {
+        let t = Transaction {
+            r#type: Type::random(),
+            client: rand::random(),
+            id: unsafe { ID },
+            amount: rand::random(),
+            under_dispute: rand::random(),
+        };
+        unsafe {
+            ID += 1;
+        }
+        t
+    }
+
     /// Check if the transaction is under dispute
     pub fn under_dispute(&self) -> bool {
         self.under_dispute
@@ -87,6 +118,27 @@ impl TransactionLog {
         match self.transactions.get_mut(&tx_id) {
             None => (),
             Some(t) => t.under_dispute = false,
+        }
+    }
+}
+
+pub mod utils {
+    use super::Transaction;
+
+    pub struct RandomTransactions {}
+
+    impl RandomTransactions {
+        pub fn new() -> Self {
+            RandomTransactions {}
+        }
+    }
+
+    impl Iterator for RandomTransactions {
+        type Item = Transaction;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let tx = Transaction::new_random();
+            Some(tx)
         }
     }
 }
