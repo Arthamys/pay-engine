@@ -23,10 +23,18 @@ Some of the core functionality of for handling client's balances are also unit t
 Make sure you have `cargo-fuzz` installed (`cargo install cargo-fuzz`)
 
 ```bash
-cargo +nightly fuzz run fuzz_tz -- -jobs=30 -ascii_only=1 -rss_limit_mb=0 -len_control=0 -malloc_limit_mb=4096
+cargo +nightly fuzz run fuzz_tz -- -jobs=10 -rss_limit_mb=0 -len_control=0 -malloc_limit_mb=4096
 ```
 
 I have not found any issues while fuzzing yet.
+
+## Benchmarking
+
+To run the benchmarks after making a modification, run
+
+```bash
+cargo bench
+```
 
 # Design
 
@@ -51,6 +59,3 @@ If we run a transaction that is invalid, it does not get pushed to the Transacti
 
 - [ ] The Fixtures used for testing could be better. We could imagine a system 
       where we can create a simple list of transactions using macros. (transactions!(deposit!(1, 10.1), deposit!(2, 4.0), withdraw!(1, 44.134533))) -> Input Transactions to the engine
-
-- [ ] There is no good benchmarking suite yet. We could try fuzzing a large number
-      of order to check the correct scalability of the program.
