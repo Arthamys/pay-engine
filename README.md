@@ -37,7 +37,11 @@ If we run a transaction that is invalid, it does not get pushed to the Transacti
 
 # Improvements
 
-So far, these structures only store data in memory. This approach is not scalable, as the number of transactions
-grow.
-To make these structures more scalable, we could move the backing storage of the _TransactionLog_ to a database
-that is well tuned for writes, as we would most likely append data often, and query only for disputes.
+- [ ] So far, these structures only store data in memory. This approach is not
+      scalable, as the number of transactions grow. To make these structures more scalable, we could move the backing storage of the _TransactionLog_ to a database that is well tuned for writes, as we would most likely append data often, and query only for disputes.
+
+- [ ] The Fixtures used for testing could be better. We could imagine a system 
+      where we can create a simple list of transactions using macros. (transactions!(deposit!(1, 10.1), deposit!(2, 4.0), withdraw!(1, 44.134533))) -> Input Transactions to the engine
+
+- [ ] There is no good benchmarking suite yet. We could try fuzzing a large number
+      of order to check the correct scalability of the program.
