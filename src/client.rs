@@ -1,20 +1,22 @@
 //! Represents the Client data structure
 use crate::error::{Error, Result};
+use crate::transaction::Transaction;
 
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 use std::collections::HashMap;
 
 /// Represents a Client's state
-#[derive(Debug)]
-pub struct Client {
+#[derive(Debug, Clone)]
+pub struct Wallet {
     id: u16,
     available_balance: f64,
     held_balance: f64,
     total_balance: f64,
     locked: bool,
+    transactions: HashMap<u32, Transaction>,
 }
 
-impl Serialize for Client {
+impl Serialize for Wallet {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -32,16 +34,41 @@ impl Serialize for Client {
     }
 }
 
-impl Client {
+impl Wallet {
+    /// Build an empty & unlocked wallet with an arbitrary `id`
     pub fn with_id(id: u16) -> Self {
-        let c = Client {
+        let c = Wallet {
             id,
             available_balance: 0.0,
             held_balance: 0.0,
             total_balance: 0.0,
             locked: false,
+            transactions: HashMap::new(),
         };
         c
+    }
+
+    /// Check if the transaction is linked to this wallet
+    pub fn has_tx(&self, tx_id: u32) -> bool {
+        self.transactions.contains_key(&tx_id)
+    }
+
+    /// Get the details of the tx, if stored in this wallet
+    pub fn get_tx(&self, tx_id: u32) -> Option<&Transaction> {
+        self.transactions.get(&tx_id)
+    }
+
+    /// Get access to the tx, if stored in this wallet
+    pub fn get_tx_mut(&mut self, tx_id: u32) -> Option<&mut Transaction> {
+        self.transactions.get_mut(&tx_id)
+    }
+
+    /// record a transaction to the wallet's log
+    pub fn record_tx(&mut self, t: &Transaction) {
+        match self.transactions.insert(t.id, t.clone()) {
+            Some(_) => panic!("Overwrotte a previous transaction in client log"),
+            None => (),
+        }
     }
 
     /// Add funds to the client's balance
@@ -106,6 +133,7 @@ impl Client {
         self.locked = true;
     }
 
+    // Getters for unit tests
     #[cfg(test)]
     pub fn available_balance(&self) -> f64 {
         self.available_balance
@@ -120,9 +148,9 @@ impl Client {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ClientWallets {
-    wallets: HashMap<u16, Client>,
+    wallets: HashMap<u16, Wallet>,
 }
 
 impl ClientWallets {
@@ -132,9 +160,9 @@ impl ClientWallets {
         }
     }
 
-    pub fn get_or_create_mut(&mut self, client_id: u16) -> &mut Client {
+    pub fn get_or_create_mut(&mut self, client_id: u16) -> &mut Wallet {
         if !self.wallets.contains_key(&client_id) {
-            self.wallets.insert(client_id, Client::with_id(client_id));
+            self.wallets.insert(client_id, Wallet::with_id(client_id));
         }
         self.wallets.get_mut(&client_id).unwrap()
     }
@@ -144,7 +172,7 @@ impl ClientWallets {
 
         // We sort here to have a consistent output order.
         // This allows for easier testing, as more predictable.
-        let mut sorted: Vec<(&u16, &Client)> = self.wallets.iter().collect();
+        let mut sorted: Vec<(&u16, &Wallet)> = self.wallets.iter().collect();
         sorted.sort_by_key(|(_, c)| c.id());
         for (_, client) in &sorted {
             wtr.serialize(client)?;
@@ -158,13 +186,13 @@ impl ClientWallets {
 mod test {
     use super::*;
 
-    fn base_client() -> Client {
-        Client::with_id(1)
+    fn base_client() -> Wallet {
+        Wallet::with_id(1)
     }
 
     /// construct a new client with a balance of `balance`
-    fn base_client_with_funds(funds: f64) -> Client {
-        let mut c = Client::with_id(1);
+    fn base_client_with_funds(funds: f64) -> Wallet {
+        let mut c = Wallet::with_id(1);
         c.available_balance += funds;
         c.total_balance += funds;
         c

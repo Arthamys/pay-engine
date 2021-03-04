@@ -1,6 +1,6 @@
 use rand::random;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 /// The type of the transaction (withdrawal, deposit, dispute, resolve, chargeback)
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -66,26 +66,43 @@ impl Transaction {
     pub fn under_dispute(&self) -> bool {
         self.under_dispute
     }
+
+    /// Flag a transaction as under dispute
+    pub fn dispute(&mut self) {
+        self.under_dispute = true;
+    }
+
+    /// Clear the under dispute flag
+    pub fn undispute(&mut self) {
+        self.under_dispute = false;
+    }
+
+    /// Return true if the transaction is a primitive Deposit/withdrawal
+    pub fn primitive(&self) -> bool {
+        match self.r#type {
+            Type::Deposit | Type::Withdrawal => true,
+            _ => false,
+        }
+    }
 }
 
 /// The TransactionLog holds the list of all valid transactions processed
 /// by the engine.
 /// Every transaction that gets successfully processed by the engine gets
 /// `push()`ed to the log.
-/// It can then be queried to `find()` a specific transaction by id.
 /// Attempting to add a transaction with an id that already was recorded
 /// silently fails.
 #[derive(Debug)]
 pub struct TransactionLog {
     /// map of transaction id to transaction
-    transactions: HashMap<u32, Transaction>,
+    transactions: HashSet<u32>,
 }
 
 impl TransactionLog {
     /// Create a new empty transaction log
     pub fn new() -> Self {
         TransactionLog {
-            transactions: HashMap::new(),
+            transactions: HashSet::new(),
         }
     }
 
@@ -96,38 +113,12 @@ impl TransactionLog {
 
     /// Add a new transaction to the list
     pub fn push(&mut self, t: &Transaction) {
-        match self.transactions.get(&t.id) {
-            Some(_) => (), // silently fail
-            None => {
-                self.transactions.insert(t.id, t.clone());
-            }
-        };
-    }
-
-    /// Find a transaction with a given id in the log
-    pub fn find(&self, tx_id: u32) -> Option<&Transaction> {
-        self.transactions.get(&tx_id)
+        self.transactions.insert(t.id);
     }
 
     /// Checks if the transaction with id `tx_id` exits in the log
     pub fn contains(&self, tx_id: u32) -> bool {
-        self.transactions.contains_key(&tx_id)
-    }
-
-    /// Mark a transaction as under dispute
-    pub fn dispute(&mut self, tx_id: u32) {
-        match self.transactions.get_mut(&tx_id) {
-            None => (),
-            Some(t) => t.under_dispute = true,
-        }
-    }
-
-    /// Reset the dispute status of a transaction
-    pub fn undispute(&mut self, tx_id: u32) {
-        match self.transactions.get_mut(&tx_id) {
-            None => (),
-            Some(t) => t.under_dispute = false,
-        }
+        self.transactions.contains(&tx_id)
     }
 }
 

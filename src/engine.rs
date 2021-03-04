@@ -1,193 +1,135 @@
 use std::time::Instant;
 
-use crate::client::{Client, ClientWallets};
 use crate::transaction::{Transaction, TransactionLog, Type::*};
+use crate::Result;
+use crate::{
+    client::{ClientWallets, Wallet},
+    error::Error,
+};
 
-pub fn run<S: Iterator>(
-    transactions: &mut S, /*stream of transactions*/
-) -> (ClientWallets, TransactionLog)
-where
-    S::Item: Into<Transaction>,
-{
-    let mut tx_log = TransactionLog::new();
-    let mut wallets = ClientWallets::new();
-    let total = Instant::now();
-    let total_tx_count = transactions.size_hint().1.unwrap_or(1) as u128;
-
-    for t in transactions {
-        // TODO activate only when profiling ?
-        let single = Instant::now();
-        let t = t.into();
-        let mut client = wallets.get_or_create_mut(t.client);
-        execute_transaction(&t, &mut tx_log, &mut client);
-        log::trace!(
-            "Took {}ns to process transaction",
-            single.elapsed().as_nanos()
-        );
-    }
-    // TODO delete
-    log::error!(
-        "Took ~{}ns per transaction",
-        total.elapsed().as_nanos() / total_tx_count
-    );
-    (wallets, tx_log)
+pub struct Engine {
+    past_tx: TransactionLog,
+    wallets: ClientWallets,
 }
 
-/// Run the correct logic for the type of transaction.
-/// If the transaction was valid and successful, it gets added to the TransactionLog
-pub fn execute_transaction(t: &Transaction, tx_log: &mut TransactionLog, client: &mut Client) {
-    let tx_exists = tx_log.contains(t.id);
-    let record_op = match t.r#type {
-        Deposit if !tx_exists => deposit(client, t.amount),
-        Withdrawal if !tx_exists => withdraw(client, t.amount),
-        Dispute => dispute(client, t.id, tx_log),
-        Resolve => resolve(client, t.id, tx_log),
-        Chargeback => chargeback(client, t.id, tx_log),
-        _ => false,
+impl Engine {
+    pub fn new() -> Self {
+        Engine {
+            past_tx: TransactionLog::new(),
+            wallets: ClientWallets::new(),
+        }
+    }
+
+    pub fn run<S: Iterator>(
+        &mut self,
+        transactions: &mut S, /*stream of transactions*/
+    ) -> ClientWallets
+    where
+        S::Item: Into<Transaction>,
+    {
+        let total = Instant::now();
+        let total_tx_count = transactions.size_hint().1.unwrap_or(1) as u128;
+
+        for t in transactions {
+            let t = t.into();
+            if t.primitive() && self.past_tx.contains(t.id) {
+                // This is a duplicate transaction, ignore
+                continue;
+            }
+            let single = Instant::now();
+            let _ = execute_transaction(&t, self.wallets.get_or_create_mut(t.client))
+                // handle errors in execution
+                .map_err(|e| log::warn!("{}", e))
+                .map(|r| {
+                    if r.is_some() {
+                        self.past_tx.push(r.unwrap());
+                    }
+                });
+            log::trace!(
+                "Took {}ns to process transaction",
+                single.elapsed().as_nanos()
+            );
+        }
+        // TODO delete
+        log::error!(
+            "Took ~{}ns per transaction",
+            total.elapsed().as_nanos() / total_tx_count
+        );
+        self.wallets.clone()
+    }
+
+    /// Returns the number of transactions that were successfully executed and recorded
+    /// by the engine.
+    pub fn valid_transactions(&self) -> usize {
+        self.past_tx.len()
+    }
+}
+
+/// Given a transaction and the client that issued the transaction,
+/// execute the transaction, if the Transaction was valid.
+/// Returns the transaction if it needs to be recorded.
+fn execute_transaction<'a>(
+    t: &'a Transaction,
+    wallet: &mut Wallet,
+) -> Result<Option<&'a Transaction>> {
+    match t.r#type {
+        Deposit => deposit(t, wallet)?,
+        Withdrawal => withdraw(t, wallet)?,
+        Dispute => dispute(t, wallet)?,
+        Resolve => resolve(t, wallet)?,
+        Chargeback => chargeback(t, wallet)?,
     };
-    if record_op {
-        tx_log.push(t);
+    Ok(Some(t))
+}
+
+fn deposit(tx: &Transaction, wallet: &mut Wallet) -> Result<()> {
+    wallet.credit(tx.amount);
+    wallet.record_tx(tx);
+    Ok(())
+}
+
+fn withdraw(tx: &Transaction, wallet: &mut Wallet) -> Result<()> {
+    wallet.debit(tx.amount)?;
+    wallet.record_tx(tx);
+    Ok(())
+}
+
+fn dispute(tx: &Transaction, wallet: &mut Wallet) -> Result<()> {
+    let orig_tx = wallet
+        .get_tx(tx.id)
+        .ok_or(Error::AccessViolation(tx.client, tx.id))?
+        .clone();
+    if orig_tx.under_dispute() {
+        Err(Error::MultipleDispute(tx.id))
+    } else {
+        wallet.get_tx_mut(tx.id).unwrap().dispute();
+        wallet.hold(orig_tx.amount)
     }
 }
 
-/// Credit the client's account of `amount` funds.
-fn deposit(client: &mut Client, amount: f64) -> bool {
-    client.credit(amount);
-    log::trace!("deposited {} to client {}'s balance", amount, client.id());
-    true
+fn resolve(tx: &Transaction, wallet: &mut Wallet) -> Result<()> {
+    let orig_tx = wallet
+        .get_tx(tx.id)
+        .ok_or(Error::AccessViolation(tx.client, tx.id))?
+        .clone();
+    if orig_tx.under_dispute() {
+        wallet.get_tx_mut(tx.id).unwrap().undispute();
+        wallet.release(orig_tx.amount)
+    } else {
+        Err(Error::ResolveUndisputed(tx.client, tx.id))
+    }
 }
 
-/// Withdraw `amount` from the client's account, if there are sufficient funds.
-fn withdraw(client: &mut Client, amount: f64) -> bool {
-    if let Err(_) = client.debit(amount) {
-        log::debug!(
-            "client {} tried to withdraw more than available balance",
-            client.id()
-        );
-        return false;
+fn chargeback(tx: &Transaction, wallet: &mut Wallet) -> Result<()> {
+    let orig_tx = wallet
+        .get_tx(tx.id)
+        .ok_or(Error::AccessViolation(tx.client, tx.id))?
+        .clone();
+    if orig_tx.under_dispute() {
+        wallet.confiscate(orig_tx.amount)?;
+        wallet.lock();
+        Ok(())
+    } else {
+        Err(Error::ChargebackUndisputed(tx.client, tx.id))
     }
-    log::trace!("withdrew {} from client {}'s balance", amount, client.id());
-    true
-}
-
-/// Dispute a transaction
-///
-/// # Notes:
-/// - Disputing an order can only be done by the client that has issued the
-/// target transaction.
-/// - A transaction can only be under dispute once at a time. If a dispute is
-/// opened on a transaction, subsequent disputes will have no effect.
-/// - If a dispute would engage funds that are no longer available, nothing happens
-/// - If there is no record of transaction `tx`, nothing happens
-fn dispute(client: &mut Client, tx: u32, tx_hist: &mut TransactionLog) -> bool {
-    // check that the target transaction exists
-    match tx_hist.find(tx) {
-        Some(transaction) => {
-            if transaction.client != client.id() {
-                log::debug!(
-                    "dispute started by unauthorized client (offending client: {}",
-                    transaction.client
-                );
-                return false;
-            }
-            // make sure the transaction was issued by the client making the
-            // dispute request
-            if !transaction.under_dispute() {
-                // hold the client's funds
-                if let Err(_) = client.hold(transaction.amount) {
-                    log::debug!(
-                        "Inssuficient funds to dispute transaction {}",
-                        transaction.id
-                    );
-                    return false;
-                }
-                // mark transaction as under dispute
-                tx_hist.dispute(tx);
-            } else {
-                log::debug!("transaction {} is already under dispute", tx);
-                return false;
-            }
-        }
-        None => {
-            log::debug!("Invalid transaction number");
-            return false;
-        } // Invalid transaction number
-    }
-    log::trace!(
-        "opening dispute on transaction {} made by client {}",
-        tx,
-        client.id()
-    );
-    true
-}
-
-/// Resolve a transaction
-/// A transaction can only be resolved by whoever issued it.
-/// If the transaction is not under dispute, it does nothing.
-fn resolve(client: &mut Client, tx: u32, tx_hist: &mut TransactionLog) -> bool {
-    match tx_hist.find(tx) {
-        Some(transaction) => {
-            // make sure the transaction was issued by the client making this request
-            if client.id() != transaction.client {
-                log::warn!("unauthorized client tried to resolve transaction {}", tx);
-                return false;
-            }
-            if transaction.under_dispute() {
-                if let Err(_) = client.release(transaction.amount) {
-                    log::warn!("Insufficient held funds to resolve transaction {}", tx);
-                    return false;
-                }
-                tx_hist.undispute(tx);
-            } else {
-                log::debug!(
-                    "transaction {} isn't under dispute. It cannot be resolved.",
-                    tx
-                );
-                return false;
-            }
-        }
-        None => {
-            log::debug!("Invalid transaction number");
-            return false;
-        }
-    }
-    log::trace!(
-        "resolving dispute on transaction {} made by client {}",
-        tx,
-        client.id()
-    );
-    true
-}
-
-fn chargeback(client: &mut Client, tx: u32, tx_hist: &mut TransactionLog) -> bool {
-    match tx_hist.find(tx) {
-        Some(transaction) => {
-            // make sure the transaction was issued by the client making the
-            // dispute request
-            if transaction.under_dispute() {
-                if let Err(_) = client.confiscate(transaction.amount) {
-                    log::warn!("Inssuficient funds to chargeback transaction {}", tx);
-                    return false;
-                }
-                // Uncomment to allow a transaction to be disputed multiple times.
-                //tx_hist.resolve(tx);
-            } else {
-                log::debug!("Transaction {} is not under dispute", tx);
-                return false;
-                // invalid dispute order
-            }
-        }
-        None => {
-            log::debug!("Invalid transaction number");
-            return false;
-        }
-    }
-
-    client.lock();
-    log::trace!(
-        "charging back dispute on transaction {} made by client {}",
-        tx,
-        client.id()
-    );
-    true
 }

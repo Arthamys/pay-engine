@@ -4,6 +4,11 @@ To run the project, simply run `cargo run -- <input_file>` to invoke the payment
 
 The program writes the balances of the clients encountered to the standard output.
 
+You can also run the program without arguments to start a the engine and run it against 1 million randomly generated transactions.
+```bash
+cargo run
+```
+
 ## Testing
 
 You can run

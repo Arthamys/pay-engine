@@ -8,7 +8,7 @@ use simple_logger::SimpleLogger;
 fn main() -> Result<()> {
     SimpleLogger::new()
         // change here to enable logs
-        .with_level(log::LevelFilter::Error)
+        .with_level(log::LevelFilter::Off)
         .init()
         .unwrap();
 
@@ -25,12 +25,17 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// Run the payment engine on the transactions provided,  or randomly generated
 pub fn run_engine(filepath: Option<String>) -> Result<()> {
     let mut transactions = get_transaction_stream(&filepath)?;
     let total_transactions = transactions.size_hint().1.unwrap_or(1);
     let before = Instant::now();
-    let (wallets, tx_log) = engine::run(&mut transactions);
+
+    let mut engine = engine::Engine::new();
+    let wallets = engine.run(&mut transactions);
+
     let runtime = before.elapsed().as_secs_f32();
+
     let res = if filepath.is_some() {
         wallets.print_balances().map_err(|e| {
             eprintln!("Could not serialize wallet balances ({})", e);
@@ -39,10 +44,11 @@ pub fn run_engine(filepath: Option<String>) -> Result<()> {
     } else {
         Ok(())
     };
+
     log::error!(
         "Executed {} successfull transactions ({}%) out of {} in {:.04}s",
-        tx_log.len(),
-        ((100 * tx_log.len()) / total_transactions),
+        engine.valid_transactions(),
+        ((100 * engine.valid_transactions()) / total_transactions),
         total_transactions,
         runtime
     );

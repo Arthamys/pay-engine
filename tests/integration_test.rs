@@ -5,7 +5,7 @@ use std::iter::Iterator;
 #[ignore]
 fn exec_100_million_tx() {
     let tx_gen = RandomTransactions::new();
-    engine::run(
+    engine::Engine::new().run(
         &mut tx_gen
             .into_iter()
             .take(/*u32::max_value()*/ 100_000_000 as usize),
@@ -15,7 +15,7 @@ fn exec_100_million_tx() {
 #[test]
 fn exec_1_million_tx() {
     let tx_gen = RandomTransactions::new();
-    engine::run(
+    engine::Engine::new().run(
         &mut tx_gen
             .into_iter()
             .take(/*u32::max_value()*/ 1_000_000 as usize),

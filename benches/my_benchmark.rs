@@ -5,7 +5,7 @@ use std::time::Duration;
 
 fn exec_n_tx(n: usize) {
     let tx_gen = RandomTransactions::new();
-    engine::run(&mut tx_gen.into_iter().take(n));
+    engine::Engine::new().run(&mut tx_gen.into_iter().take(n));
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
