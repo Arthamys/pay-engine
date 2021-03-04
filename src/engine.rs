@@ -7,31 +7,31 @@ pub fn run<S: Iterator>(
 where
     S::Item: Into<Transaction>,
 {
-    let mut t_log = TransactionLog::new();
+    let mut tx_log = TransactionLog::new();
     let mut wallets = ClientWallets::new();
 
-    while let Some(t) = transactions.next() {
+    for t in transactions {
         let t = t.into();
         let mut client = wallets.get_or_create_mut(t.client);
-        execute_transaction(&t, &mut t_log, &mut client);
+        execute_transaction(&t, &mut tx_log, &mut client);
     }
-    (wallets, t_log)
+    (wallets, tx_log)
 }
 
 /// Run the correct logic for the type of transaction.
 /// If the transaction was valid and successful, it gets added to the TransactionLog
-pub fn execute_transaction(t: &Transaction, t_log: &mut TransactionLog, client: &mut Client) {
-    let tx_exists = t_log.contains(t.id);
+pub fn execute_transaction(t: &Transaction, tx_log: &mut TransactionLog, client: &mut Client) {
+    let tx_exists = tx_log.contains(t.id);
     let record_op = match t.r#type {
         Deposit if !tx_exists => deposit(client, t.amount),
         Withdrawal if !tx_exists => withdraw(client, t.amount),
-        Dispute => dispute(client, t.id, t_log),
-        Resolve => resolve(client, t.id, t_log),
-        Chargeback => chargeback(client, t.id, t_log),
+        Dispute => dispute(client, t.id, tx_log),
+        Resolve => resolve(client, t.id, tx_log),
+        Chargeback => chargeback(client, t.id, tx_log),
         _ => false,
     };
     if record_op {
-        t_log.push(t);
+        tx_log.push(t);
     }
 }
 

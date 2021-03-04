@@ -49,7 +49,7 @@ To run the criterion benchmarks after making a modification, run
 cargo bench
 ```
 
-Beware, this takes a long time.
+Beware, this takes more than 5 minutes to run the full benchmark.
 
 # Design
 
