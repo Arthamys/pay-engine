@@ -17,13 +17,12 @@ pub enum Type {
 impl Type {
     fn random() -> Self {
         use Type::*;
-        match random::<u8>() % 5_u8 {
-            0 => Withdrawal,
-            1 => Deposit,
-            2 => Dispute,
-            3 => Resolve,
-            4 => Chargeback,
-            _ => unreachable!(),
+        match random::<u8>() % 100_u8 {
+            0..=29 => Withdrawal,
+            30..=59 => Deposit,
+            60..=69 => Dispute,
+            70..=89 => Resolve,
+            _ => Chargeback,
         }
     }
 }
@@ -44,11 +43,12 @@ pub struct Transaction {
 static mut ID: u32 = 1;
 
 impl Transaction {
+    /// Create a new transaction filled with random data.
     pub fn new_random() -> Self {
         let t = Transaction {
             r#type: Type::random(),
             client: rand::random(),
-            id: unsafe { ID },
+            id: unsafe { ID.wrapping_sub(random()) },
             amount: rand::random(),
             under_dispute: rand::random(),
         };
