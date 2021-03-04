@@ -52,8 +52,12 @@ impl Transaction {
             amount: rand::random(),
             under_dispute: rand::random(),
         };
+        // Change the ID 30% of the time, to allow for generating
+        // more plausible scenarios
         unsafe {
-            ID += 1;
+            if (random::<u8>() % 100) < 30 {
+                ID += 1;
+            }
         }
         t
     }
@@ -83,6 +87,11 @@ impl TransactionLog {
         TransactionLog {
             transactions: HashMap::new(),
         }
+    }
+
+    /// Returns the number of transactions in the log
+    pub fn len(&self) -> usize {
+        self.transactions.len()
     }
 
     /// Add a new transaction to the list
