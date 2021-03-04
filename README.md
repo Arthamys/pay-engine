@@ -30,11 +30,26 @@ I have not found any issues while fuzzing yet.
 
 ## Benchmarking
 
-To run the benchmarks after making a modification, run
+### Flamegraph
+Measure is key when trying to improve performance.
+To have a good idea of where the hot zones of our code are, we can use the
+`cargo flamegraph` tool.
+
+```bash
+cargo flamegraph --bin pay-engine && firefox flamegraph.svg
+```
+when running against 1 million of randomly generated transactions.
+(run `cargo install flamegraph` if you do not have it installed)
+
+### Criterion
+
+To run the criterion benchmarks after making a modification, run
 
 ```bash
 cargo bench
 ```
+
+Beware, this takes a long time.
 
 # Design
 
