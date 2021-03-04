@@ -21,14 +21,14 @@ where
         let mut client = wallets.get_or_create_mut(t.client);
         execute_transaction(&t, &mut tx_log, &mut client);
         log::trace!(
-            "Took {}_usec to process transaction",
-            single.elapsed().as_micros()
+            "Took {}ns to process transaction",
+            single.elapsed().as_nanos()
         );
     }
     // TODO delete
     log::error!(
-        "Took ~{}usec per transaction",
-        total.elapsed().as_micros() / total_tx_count
+        "Took ~{}ns per transaction",
+        total.elapsed().as_nanos() / total_tx_count
     );
     (wallets, tx_log)
 }
