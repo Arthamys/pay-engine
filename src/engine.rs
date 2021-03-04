@@ -96,25 +96,25 @@ fn withdraw(tx: &Transaction, wallet: &mut Wallet) -> Result<()> {
 
 fn dispute(tx: &Transaction, wallet: &mut Wallet) -> Result<()> {
     let orig_tx = wallet
-        .get_tx(tx.id)
-        .ok_or(Error::AccessViolation(tx.client, tx.id))?
-        .clone();
+        .get_tx_mut(tx.id)
+        .ok_or(Error::AccessViolation(tx.client, tx.id))?;
     if orig_tx.under_dispute() {
         Err(Error::MultipleDispute(tx.id))
     } else {
-        wallet.get_tx_mut(tx.id).unwrap().dispute();
-        wallet.hold(orig_tx.amount)
+        orig_tx.dispute();
+        let amount = orig_tx.amount;
+        wallet.hold(amount)
     }
 }
 
 fn resolve(tx: &Transaction, wallet: &mut Wallet) -> Result<()> {
     let orig_tx = wallet
-        .get_tx(tx.id)
-        .ok_or(Error::AccessViolation(tx.client, tx.id))?
-        .clone();
+        .get_tx_mut(tx.id)
+        .ok_or(Error::AccessViolation(tx.client, tx.id))?;
     if orig_tx.under_dispute() {
-        wallet.get_tx_mut(tx.id).unwrap().undispute();
-        wallet.release(orig_tx.amount)
+        orig_tx.undispute();
+        let amount = orig_tx.amount;
+        wallet.release(amount)
     } else {
         Err(Error::ResolveUndisputed(tx.client, tx.id))
     }
@@ -122,11 +122,11 @@ fn resolve(tx: &Transaction, wallet: &mut Wallet) -> Result<()> {
 
 fn chargeback(tx: &Transaction, wallet: &mut Wallet) -> Result<()> {
     let orig_tx = wallet
-        .get_tx(tx.id)
-        .ok_or(Error::AccessViolation(tx.client, tx.id))?
-        .clone();
+        .get_tx_mut(tx.id)
+        .ok_or(Error::AccessViolation(tx.client, tx.id))?;
     if orig_tx.under_dispute() {
-        wallet.confiscate(orig_tx.amount)?;
+        let amount = orig_tx.amount;
+        wallet.confiscate(amount)?;
         wallet.lock();
         Ok(())
     } else {
