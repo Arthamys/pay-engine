@@ -67,6 +67,12 @@ It acts on two data structures:
 
 If we run a transaction that is invalid, it does not get pushed to the TransactionLog.
 
+
+We could have the clients hold a list of all the transactions they have issued.
+That way, when we want to make an operation, we use the client to change their wallet balance, and we update _their_ transactions log.
+When we need to validate if the operation is legit, we lookup in the client's log,
+which is way smaller, so maybe we spend less time in `HashMap::contains_key()`
+
 # Improvements
 
 - [ ] So far, these structures only store data in memory. This approach is not
