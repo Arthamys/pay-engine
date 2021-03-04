@@ -1,5 +1,6 @@
 use parser::Parser;
 use pay_engine::*;
+use std::time::Instant;
 use transaction::{utils::RandomTransactions, Transaction};
 
 use simple_logger::SimpleLogger;
@@ -7,7 +8,7 @@ use simple_logger::SimpleLogger;
 fn main() -> Result<()> {
     SimpleLogger::new()
         // change here to enable logs
-        .with_level(log::LevelFilter::Off)
+        .with_level(log::LevelFilter::Error)
         .init()
         .unwrap();
 
@@ -25,17 +26,31 @@ fn main() -> Result<()> {
 }
 
 pub fn run_engine(filepath: Option<String>) -> Result<()> {
-    let mut transactions = get_transaction_stream(filepath)?;
-    let (wallets, _) = engine::run(&mut transactions);
-
-    wallets.print_balances().map_err(|e| {
-        eprintln!("Could not serialize wallet balances ({})", e);
-        error::Error::SerializeError
-    })
+    let mut transactions = get_transaction_stream(&filepath)?;
+    let total_transactions = transactions.size_hint().1.unwrap_or(1);
+    let before = Instant::now();
+    let (wallets, tx_log) = engine::run(&mut transactions);
+    let runtime = before.elapsed().as_secs_f32();
+    let res = if filepath.is_some() {
+        wallets.print_balances().map_err(|e| {
+            eprintln!("Could not serialize wallet balances ({})", e);
+            error::Error::SerializeError
+        })
+    } else {
+        Ok(())
+    };
+    log::error!(
+        "Executed {} successfull transactions ({}%) out of {} in {:.04}s",
+        tx_log.len(),
+        ((100 * tx_log.len()) / total_transactions),
+        total_transactions,
+        runtime
+    );
+    res
 }
 
 fn get_transaction_stream(
-    filepath: Option<String>,
+    filepath: &Option<String>,
 ) -> Result<Box<dyn Iterator<Item = Transaction>>> {
     if let Some(file) = filepath {
         match Parser::new(&file) {
@@ -46,5 +61,5 @@ fn get_transaction_stream(
             }
         }
     }
-    return Ok(Box::new(RandomTransactions::new().take(10_000_000)));
+    return Ok(Box::new(RandomTransactions::new().take(1_000_000)));
 }
