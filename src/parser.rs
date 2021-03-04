@@ -8,6 +8,7 @@ pub struct Parser {
 }
 
 impl Parser {
+    /// Create a new parser that reads from the given file
     pub fn new(file_path: &str) -> Result<Parser> {
         let rdr = ReaderBuilder::new()
             .flexible(true)

@@ -3,6 +3,7 @@ use thiserror::Error;
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Error)]
+/// The different errors we can encounter in our program
 pub enum Error {
     #[error("Could not read CSV ({0})")]
     ParseError(#[from] csv::Error),
