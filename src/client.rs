@@ -133,10 +133,9 @@ impl ClientWallets {
     }
 
     pub fn get_or_create_mut(&mut self, client_id: u16) -> &mut Client {
-        if !self.wallets.contains_key(&client_id) {
-            self.wallets.insert(client_id, Client::with_id(client_id));
-        }
-        self.wallets.get_mut(&client_id).unwrap()
+        self.wallets
+            .entry(client_id)
+            .or_insert_with(|| Client::with_id(client_id))
     }
 
     pub fn print_balances(&self) -> Result<()> {
