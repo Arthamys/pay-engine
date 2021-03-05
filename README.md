@@ -1,77 +1,240 @@
+# Pay Engine
+
+A toy payment engine.
+
+Given a list of transaction in a CSV file, apply the transactions to the wallets,
+handle disputes on the transactions, and print the final balances of the clients.
+
+## Transactions
+
+Transactions will come in this form:
+```text
+type,       client, tx, amount
+deposit,    5,      1,  42.2
+deposit,    2,      2,  2.0
+deposit,    3,      3,  2.0
+withdrawal, 5,      5,  1.5
+withdrawal, 2,      4,  3.0
+dispute,    1,      1
+chargeback, 1,      1
+resolve,    1,      1
+resolve,    1,      1
+resolve,    1,      1
+deposit,    2,      7,  3.8
+```
+
+## Wallets
+
+A wallet tracks the balances of a client.
+
+A Client has his funds split into two balances:
+- `available` funds, which are ready to be used in transactions
+- `held` funds, that are involved in disputed transactions (see below)
+
+available|held|total
+---------|----|-----
+f64|f64|f64
+
+## Types of operations
+
+There are 5 kind of transactions:
+
+### **Deposit**
+
+Add funds to the wallet of the client that issued the transaction.
+This should increase the client's available and total funds.
+
+type|client|tx|amount
+----|------|--|------
+deposit|5|1|42.2
+
+### **Withdrawal**
+
+Remove funds from the wallet of the client that issued the transaction.
+This should decrease the client's available and total funds.
+
+type|client|tx|amount
+----|------|--|------
+withdrawal|5|5|2.2
+
+If a client does not have sufficient funds to execute the withdrawal, discard
+this transaction.
+
+### **Dispute**
+
+Dispute a transaction. When a transaction is disputed, it reverses
+the operation, and puts the disputed funds into a holding balance in the client's
+wallet.
+
+type|client|tx|amount
+----|------|--|------
+dispute|5|1|
+
+A transaction can only be disputed once. 
+
+If the client issuing the transaction is not the same as the one that issued 
+the linked `tx`, nothing happens.
+
+Disputing a transaction that is already under dispute has no effect.
+
+To resolve a dispute, the client has to issue a **Resolve** or **Chargeback**
+transaction.
+
+Notice that this does not have an **amount** field, but uses the `tx` field to 
+refer to a transaction id directly.
+If the transaction that is referenced does not exist, we can safely ignore the
+transaction.
+
+### **Resolve**
+
+Resolve a dispute, releasing the client's held funds.
+This should decrease the client's held balance, and increase his available balance.
+
+type|client|tx|amount
+----|------|--|------
+resolve|5|1|
+
+If the `tx` is not under dispute, nothing happens.
+If the client issuing the transaction is not the same as the one that issued
+the linked `tx`, nothing happens.
+
+Notice that this does not have an **amount** field, but uses the `tx` field to 
+refer to a transaction id directly.
+If the transaction that is referenced does not exist, we can safely ignore the
+transaction.
+
+### **Chargeback**
+
+This represents the client reversing a transaction. Held funds are now withdrawn
+meaning we decrease the client's held and total funds.
+If a chargeback occurs, the client's account should be locked.
+
+type|client|tx|amount
+----|------|--|------
+chargeback|5|1|
+
+If the `tx` is not under dispute, nothing happens.
+If the client issuing the transaction is not the same as the one that issued
+the linked `tx`, nothing happens.
+
+Notice that this does not have an **amount** field, but uses the `tx` field to 
+refer to a transaction id directly.
+If the transaction that is referenced does not exist, we can safely ignore the
+transaction.
+
+
 # Building and Running
 
-To run the project, simply run `cargo run -- <input_file>` to invoke the payment engine on a given CSV file.
+The project can be run against input CSV files if you have predefined scenarios
+to run.
 
-The program writes the balances of the clients encountered to the standard output.
+```bash
+cargo run -q -- inputs/sample1.csv
+# Expected output:
+##################
+# client,available,held,total,locked
+# 1,1.5,0.0,1.5,false
+# 2,2.0,0.0,2.0,false
+```
 
-## Testing
+It can also be invoked without a CSV file, and will generate random
+transactions, and give some high level summary of what happened.
 
-You can run
+```bash
+cargo run
+# Expected output:
+##################
+# Executed 524695 successfull transactions (52%) out of 1000000 in 5.6524s
+```
+
+# Testing
+
+There are two sources of tests in this projects. Simple "integration tests"
+using a bash script to run the program on known inputs, and checks 
+the output against known good outputs.
+
+This is obviously very flimsy, but it is sufficient to serve as basic integration tests.
+
 ```bash
 #make sure to be at the root of the repo
 bash test.sh
 ```
 
-to run a set of predefined tests agains the implementation.
+Some of the core functionality of for handling client's balances are also unit tested.
+Simply run
 
-It simply runs the program (invoking `cargo run`) and checks the output against known good outputs.
-
-Some of the core functionality of for handling client's balances are also unit tested. (run `cargo t`)
+```bash
+cargo test
+```
 
 ## Fuzzing
 
-Make sure you have `cargo-fuzz` installed (`cargo install cargo-fuzz`)
+I tried to use [fuzzing](https://en.wikipedia.org/wiki/Fuzzing) to generate random
+but semi-valid transactions, but it turns out that fuzzing did not really do the
+trick to generate long streams of close to valid inputs.
+
+I used `cargo fuzz` to fuzz my program's input, which only tested the robustness
+of the Parser I think.
+
+If you want to try out the fuzzing module, Make sure you have `cargo-fuzz`
+installed (`cargo install cargo-fuzz`) then run:
 
 ```bash
 cargo +nightly fuzz run fuzz_tz -- -jobs=10 -rss_limit_mb=0 -len_control=0 -malloc_limit_mb=4096
 ```
 
-I have not found any issues while fuzzing yet.
+I have not found any issues while fuzzing the program's input yet, but I bet my
+method is not good. If you know how I could make fuzzing pertinent for this
+project, please reach out.
 
 ## Benchmarking
 
-### Flamegraph
 Measure is key when trying to improve performance.
+
+### Flamegraph
+
 To have a good idea of where the hot zones of our code are, we can use the
-`cargo flamegraph` tool.
+`cargo flamegraph` tool (`cargo install flamegraph` if you do not have it installed).
 
 ```bash
 cargo flamegraph --bin pay-engine && firefox flamegraph.svg
 ```
-when running against 1 million of randomly generated transactions.
-(run `cargo install flamegraph` if you do not have it installed)
+
+This runs the engine agaisnt 1 million randomly generated transactions, giving us
+a small but workable sample to see what are the core functions we spend our
+program time in.
 
 ### Criterion
 
-To run the criterion benchmarks after making a modification, run
+Once we know _where_ to focus our optimization efforts, we need to measure the
+impacts of our changes.
+
+To do this, I chose to use [criterion-rs](https://lib.rs/crates/criterion).
+
+You can look at the benchmarks in the `benches/` directory to see what kind of
+workloads will be measured by the benchmarks.
+
+To run the criterion benchmarks after making a modification, simply run
 
 ```bash
+# Simply run the benchmarks
 cargo bench
+
+# Run the benchmark and save it as <new_baseline>
+cargo bench --bench benchmark -- --save-baseline <new_baseline>
+
+# Run the benchmark and compare the results against the <baseline>'s
+cargo bench --bench benchmark -- --baseline <baseline>
+
+# Don't run the benchmark but load the <new_baseline> and compare it to <old_baseline>
+cargo bench --bench benchmark -- --load-baseline <new_baseline> --baseline <old_baseline>
+
+# Run a specific benchmark
+cargo bench --bench benchmark
 ```
 
-Beware, this takes more than 5 minutes to run the full benchmark.
+Beware, this takes more than **5 minutes** to run the full benchmark.
 
-# Design
-
-The idea is to have a _Parser_ check the validity of the input csv and output a
-stream of _Operation_ s that can be executed by the engine.
-
-The idea is to apply each _Operation_ to the _Engine_, which has a simple role of
-running the business logic.
-It acts on two data structures:
-
-- a _ClientWallets_ structure that exposes a simple interface to request information from clients by their ID
-  and to update their balances.
-- a _TransactionLog_ that stores all valid processed _Transaction_. It exposes an interface to check wether a
-  transaction already exists, wether there is a dispute underway for a certain transaction and so on.
-
-If we run a transaction that is invalid, it does not get pushed to the TransactionLog.
-
-
-We could have the clients hold a list of all the transactions they have issued.
-That way, when we want to make an operation, we use the client to change their wallet balance, and we update _their_ transactions log.
-When we need to validate if the operation is legit, we lookup in the client's log,
-which is way smaller, so maybe we spend less time in `HashMap::contains_key()`
 
 # Improvements
 
