@@ -22,5 +22,6 @@ simple_logger = "1.11.0"
 thiserror = "1.0.24"
 
 [[bench]]
-name = "my_benchmark"
+# Has to match a `.rs` file in the `benches` directory
+name = "benchmark"
 harness = false
